@@ -2,9 +2,64 @@ import datasets
 import numpy as np
 import sacrebleu
 from rouge_score import rouge_scorer, scoring
+import random
+import string
 
 
 ROUGE_SCORER = None
+
+LETTERS = list(string.ascii_uppercase)
+
+
+def process_docs_mc1_chat(dataset: datasets.Dataset) -> datasets.Dataset:
+    """Convert MC1 docs to chat format with shuffled lettered choices."""
+
+    def _convert(doc):
+        choices = list(doc["mc1_targets"]["choices"])
+        labels = list(doc["mc1_targets"]["labels"])
+        # correct answer is at index 0 (label=1)
+        correct_idx = labels.index(1)
+
+        # Build paired list and shuffle deterministically by question
+        paired = list(zip(choices, labels))
+        rng = random.Random(doc["question"])
+        rng.shuffle(paired)
+
+        shuffled_choices, shuffled_labels = zip(*paired)
+        correct_letter = LETTERS[shuffled_labels.index(1)]
+        n = len(shuffled_choices)
+
+        letters_used = LETTERS[:n]
+        options_text = "\n".join(
+            f"{letters_used[i]}. {shuffled_choices[i]}" for i in range(n)
+        )
+
+        letter_list = ", ".join(letters_used[:-1]) + f" and {letters_used[-1]}"
+        prompt = (
+            f"Question: {doc['question'].strip()}\n\n"
+            f"{options_text}\n\n"
+            f"Choose the best answer from {letter_list}. "
+            f'Your response should end with "The best answer is [letter]" '
+            f"where [letter] is one of {', '.join(letters_used)}."
+        )
+
+        return {
+            "question": doc["question"],
+            "chat_prompt": prompt,
+            "chat_target": correct_letter,
+            "mc1_targets": doc["mc1_targets"],
+            "mc2_targets": doc["mc2_targets"],
+        }
+
+    return dataset.map(_convert)
+
+
+def doc_to_text_mc1_chat(doc):
+    return doc["chat_prompt"]
+
+
+def doc_to_target_mc1_chat(doc):
+    return doc["chat_target"]
 
 
 def process_results_mc2(doc, results):

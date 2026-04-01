@@ -14,10 +14,9 @@ fewshot_delimiter: "\n\n"
 doc_to_target: "{{ 'ABCD'[answerKey|int - 1] if answerKey|string in '1234' else answerKey }}"
 num_fewshot: 0
 generation_kwargs:
-  max_gen_toks: 100
+  max_gen_toks: 1024
   until:
-    - "\n\n"
-    - "."
+    - "</s>"
 metric_list:
   - metric: exact_match
     aggregation: mean
